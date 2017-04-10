@@ -6,6 +6,7 @@ namespace {
 const float kMaxDeviation = 1000;
 const float kNoiseAx = 9;
 const float kNoiseAy = 9;
+const float kEpsilon = 0.01;
 
 
 Eigen::MatrixXd CalculateJacobian(const Eigen::VectorXd& x_state) {
@@ -14,13 +15,14 @@ Eigen::MatrixXd CalculateJacobian(const Eigen::VectorXd& x_state) {
   double vx = x_state(2);
   double vy = x_state(3);
 
-  Eigen::MatrixXd hj(3, 4);
+  Eigen::MatrixXd hj(Eigen::MatrixXd::Zero(3, 4));
   double sum_of_squares = px * px + py * py;
 
   // Check division by zero
-  if (sum_of_squares == 0) {
-      // TODO: implement a better solution
-      return hj;
+  // TODO: implement a better solution
+  assert(sum_of_squares != 0);
+  if (std::fabs(px) < kEpsilon && std::fabs(py) < kEpsilon) {
+    return hj;
   }
 
   double sqrt_of_sum_of_squares = std::sqrt(sum_of_squares);
@@ -38,6 +40,8 @@ Eigen::MatrixXd CalculateJacobian(const Eigen::VectorXd& x_state) {
   hj(2, 2) = px_by_sqrt;
   hj(2, 3) = py_by_sqrt;
 
+  std::cout << "Hj" << std::endl << hj << std::endl;
+
   return hj;
 }
 
@@ -48,17 +52,18 @@ Eigen::VectorXd ConvertCartesianToPolar(const Eigen::VectorXd& cartesian) {
   double vx = cartesian(2);
   double vy = cartesian(3);
 
-  Eigen::VectorXd polar(3);
-  double sum_of_squares = px * px + py * py;
+  Eigen::VectorXd polar(Eigen::VectorXd::Zero(3));
 
-  // Check division by zero
-  if (sum_of_squares == 0) {
-      // TODO: implement a better solution
-      return polar;
+  if (std::fabs(px) < kEpsilon && std::fabs(py) < kEpsilon) {
+    return polar;
   }
 
   // TODO: consider changing to float
-  double sqrt_of_sum_of_squares = std::sqrt(sum_of_squares);
+  double sqrt_of_sum_of_squares = std::sqrt(px * px + py * py);
+
+  // Check division by zero
+  // TODO: implement a better solution
+//  assert(sqrt_of_sum_of_squares != 0);
 
   polar(0) = sqrt_of_sum_of_squares;;
   polar(1) = std::atan2(py, px);
@@ -88,7 +93,7 @@ KalmanFilter::KalmanFilter()
   : is_initialized_(false),
     previous_timestamp_(0),
     x_(Eigen::VectorXd(4)),
-    p_(Eigen::MatrixXd(4, 4)),
+    p_(Eigen::MatrixXd::Zero(4, 4)),
     h_(Eigen::MatrixXd(2 ,4)),
     r_lidar_(Eigen::MatrixXd(2, 2)),
     r_radar_(Eigen::MatrixXd(3, 3)) {
@@ -142,9 +147,9 @@ void KalmanFilter::ProcessMeasurement(const MeasurementPackage& measurement_pack
     is_initialized_ = true;
 
     // Print the output
-    std::cout << "EKF: " << std::endl;
-    std::cout << "x_ = " << x_ << std::endl;
-    std::cout << "P_ = " << p_ << std::endl;
+    std::cout << "EKF" << std::endl;
+    std::cout << "x0" << std::endl << x_ << std::endl;
+    std::cout << "P0" << std::endl << p_ << std::endl;
     return;
   }
 
@@ -156,6 +161,10 @@ void KalmanFilter::ProcessMeasurement(const MeasurementPackage& measurement_pack
   //  Prediction
   Predict(dt);
 
+  // Print the output
+//  std::cout << "x'" << std::endl << x_ << std::endl;
+//  std::cout << "P'" << std::endl << p_ << std::endl;
+
   // Update
   if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
     RadarUpdate(measurement_pack.raw_measurements_);
@@ -164,8 +173,8 @@ void KalmanFilter::ProcessMeasurement(const MeasurementPackage& measurement_pack
   }
 
   // Print the output
-  std::cout << "x_ = " << x_ << std::endl;
-  std::cout << "P_ = " << p_ << std::endl;
+//  std::cout << "x" << std::endl << x_ << std::endl;
+//  std::cout << "P" << std::endl << p_ << std::endl;
 }
 
 
@@ -198,6 +207,7 @@ void KalmanFilter::Predict(double dt) {
 
 
 void KalmanFilter::LidarUpdate(const Eigen::VectorXd& z) {
+//  std::cout << "LidarUpdate" << std::endl;
   Eigen::VectorXd y = z - h_ * x_;
   Eigen::MatrixXd ht = h_.transpose();
   Eigen::MatrixXd s = h_ * p_ * ht + r_lidar_;
@@ -212,16 +222,21 @@ void KalmanFilter::LidarUpdate(const Eigen::VectorXd& z) {
 
 
 void KalmanFilter::RadarUpdate(const Eigen::VectorXd& z) {
+//  std::cout << "RadarUpdate" << std::endl;
   // y = z - h(x)
   Eigen::VectorXd y = z - ConvertCartesianToPolar(x_);
+//  std::cout << "y" << std::endl << y << std::endl;
   // Hj instead of H for calcualting S, K, P
   Eigen::MatrixXd hj = CalculateJacobian(x_);
   Eigen::MatrixXd hjt = hj.transpose();
   Eigen::MatrixXd s = hj * p_ * hjt + r_radar_;
+//  std::cout << "s" << std::endl << s << std::endl;
   Eigen::MatrixXd k = p_ * hjt * s.inverse();
+//  std::cout << "k" << std::endl << k << std::endl;
 
   // New estimate
   x_ = x_ + k * y;
+  std::cout << "x" << std::endl << x_ << std::endl;
   size_t x_size = x_.size();
   Eigen::MatrixXd i = Eigen::MatrixXd::Identity(x_size, x_size);
   p_ = (i - k * hj) * p_;

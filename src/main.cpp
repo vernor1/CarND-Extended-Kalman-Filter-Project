@@ -1,19 +1,21 @@
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <sstream>
+//#include <stdlib.h>
 #include <vector>
-#include <stdlib.h>
 #include "Eigen/Dense"
 //#include "FusionEKF.h"
 #include "kalman_filter.h"
 #include "ground_truth_package.h"
 #include "measurement_package.h"
-#include "tools.h"
+//#include "tools.h"
 
 using namespace std;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using std::vector;
+
 
 void check_arguments(int argc, char* argv[]) {
   string usage_instructions = "Usage instructions: ";
@@ -38,6 +40,7 @@ void check_arguments(int argc, char* argv[]) {
   }
 }
 
+
 void check_files(ifstream& in_file, string& in_name,
                  ofstream& out_file, string& out_name) {
   if (!in_file.is_open()) {
@@ -49,6 +52,36 @@ void check_files(ifstream& in_file, string& in_name,
     cerr << "Cannot open output file: " << out_name << endl;
     exit(EXIT_FAILURE);
   }
+}
+
+
+Eigen::VectorXd CalculateRmse(const std::vector<Eigen::VectorXd>& estimations,
+                              const std::vector<Eigen::VectorXd>& ground_truth) {
+  Eigen::VectorXd rmse(4);
+  rmse << 0, 0, 0, 0;
+
+  // The estimation vector size should equal ground truth vector size
+  if (estimations.size() != ground_truth.size() || estimations.empty()) {
+    std::cout << "Invalid input!" << std::endl;
+    return rmse;
+  }
+
+  //  The estimation vector size should not be zero
+//  assert(!estimations.empty());
+
+  // Accumulate squared differences
+  for (auto i = 0; i < estimations.size(); ++i) {
+    Eigen::VectorXd difference = estimations[i] - ground_truth[i];
+    difference = difference.array() * difference.array();
+    rmse += difference;
+//    rmse = rmse.array() + (estimations[i] - ground_truth[i]).array().pow(2);
+  }
+
+  rmse = rmse / estimations.size();
+  rmse = rmse.array().sqrt();
+//  rmse = (rmse / estimations.size()).array().sqrt();
+
+  return rmse;
 }
 
 int main(int argc, char* argv[]) {
@@ -70,8 +103,12 @@ int main(int argc, char* argv[]) {
 
   // prep the measurement packages (each line represents a measurement at a
   // timestamp)
+//  unsigned int count = 0;
+//  unsigned int max_count = 35;
   while (getline(in_file_, line)) {
-
+//    if (++count > max_count) {
+//      break;
+//    }
     string sensor_type;
     MeasurementPackage meas_package;
     GroundTruthPackage gt_package;
@@ -82,7 +119,7 @@ int main(int argc, char* argv[]) {
     iss >> sensor_type;
     if (sensor_type.compare("L") == 0) {
       // LASER MEASUREMENT
-
+//      continue;
       // read measurements at this timestamp
       meas_package.sensor_type_ = MeasurementPackage::LASER;
       meas_package.raw_measurements_ = VectorXd(2);
@@ -96,7 +133,7 @@ int main(int argc, char* argv[]) {
       measurement_pack_list.push_back(meas_package);
     } else if (sensor_type.compare("R") == 0) {
       // RADAR MEASUREMENT
-
+//      continue;
       // read measurements at this timestamp
       meas_package.sensor_type_ = MeasurementPackage::RADAR;
       meas_package.raw_measurements_ = VectorXd(3);
@@ -143,6 +180,7 @@ int main(int argc, char* argv[]) {
 
     // output the estimation
     Eigen::VectorXd x = ekf_tracker.GetState();
+//    out_file_ << std::fixed << std::showpoint << std::setprecision(2) << std::setw(10);
     out_file_ << x(0) << "\t";
     out_file_ << x(1) << "\t";
     out_file_ << x(2) << "\t";
@@ -172,8 +210,9 @@ int main(int argc, char* argv[]) {
   }
 
   // compute the accuracy (RMSE)
-  Tools tools;
-  cout << "Accuracy - RMSE:" << endl << tools.CalculateRMSE(estimations, ground_truth) << endl;
+//  Tools tools;
+  std::cout << "RMSE" << std::endl;
+  std::cout << CalculateRmse(estimations, ground_truth) << std::endl;
 
   // close files
   if (out_file_.is_open()) {
