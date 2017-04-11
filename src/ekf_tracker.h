@@ -1,14 +1,24 @@
-#ifndef KALMAN_FILTER_H_
-#define KALMAN_FILTER_H_
+#ifndef EKF_TRACKER_H_
+#define EKF_TRACKER_H_
 
 #include "Eigen/Dense"
-#include "measurement_package.h"
 
-class KalmanFilter {
+class EkfTracker {
 public:
-  KalmanFilter();
-  virtual ~KalmanFilter() { }
-  void ProcessMeasurement(const MeasurementPackage& measurement_pack);
+  struct Measurement {
+    enum class SensorType {
+      kLidar,
+      kRadar
+    };
+
+    long long timestamp;
+    SensorType sensor_type;
+    Eigen::VectorXf value;
+  };
+
+  EkfTracker();
+  virtual ~EkfTracker() { }
+  void ProcessMeasurement(const Measurement& measurement);
   Eigen::VectorXf GetState() const { return x_; }
 
 private:
@@ -44,4 +54,4 @@ private:
   void RadarUpdate(const Eigen::VectorXf& z);
 };
 
-#endif // KALMAN_FILTER_H_
+#endif // EKF_TRACKER_H_

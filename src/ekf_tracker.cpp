@@ -1,4 +1,4 @@
-#include "kalman_filter.h"
+#include "ekf_tracker.h"
 #include <iostream>
 
 namespace {
@@ -99,30 +99,28 @@ Eigen::VectorXf ConvertPolarToCartesian(const Eigen::VectorXf& polar) {
 // Public Members
 // -----------------------------------------------------------------------------
 
-KalmanFilter::KalmanFilter()
+EkfTracker::EkfTracker()
   : is_initialized_(false),
     previous_timestamp_(0),
     x_(Eigen::VectorXf::Zero(4)),
     p_(Eigen::MatrixXf::Zero(4, 4)) { }
 
 
-void KalmanFilter::ProcessMeasurement(const MeasurementPackage& measurement_pack) {
+void EkfTracker::ProcessMeasurement(const Measurement& measurement) {
   if (!is_initialized_) {
     // Initialize the state with the first measurement
-    if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
-      x_ = ConvertPolarToCartesian(measurement_pack.raw_measurements_);
+    if (measurement.sensor_type == Measurement::SensorType::kRadar) {
+      x_ = ConvertPolarToCartesian(measurement.value);
     }
-    else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER) {
-      x_ << measurement_pack.raw_measurements_(0),
-            measurement_pack.raw_measurements_(1),
-            0, 0;
+    else {
+      x_ << measurement.value(0), measurement.value(1), 0, 0;
     }
 
     // State covariance matrix
     p_ = kPinitial;
 
     // Set the initial timestamp
-    previous_timestamp_ = measurement_pack.timestamp_;
+    previous_timestamp_ = measurement.timestamp;
 
     // Done initializing, no need to predict or update
     is_initialized_ = true;
@@ -135,17 +133,17 @@ void KalmanFilter::ProcessMeasurement(const MeasurementPackage& measurement_pack
 
 
   // Time elapsed between the current and previous measurements in seconds
-  float dt = (measurement_pack.timestamp_ - previous_timestamp_) / 1000000.0;
-  previous_timestamp_ = measurement_pack.timestamp_;
+  float dt = (measurement.timestamp - previous_timestamp_) / 1000000.0;
+  previous_timestamp_ = measurement.timestamp;
 
   //  Prediction
   Predict(dt);
 
   // Update
-  if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR) {
-    RadarUpdate(measurement_pack.raw_measurements_);
+  if (measurement.sensor_type == Measurement::SensorType::kRadar) {
+    RadarUpdate(measurement.value);
   } else {
-    LidarUpdate(measurement_pack.raw_measurements_);
+    LidarUpdate(measurement.value);
   }
 
   std::cout << "x" << std::endl << x_ << std::endl;
@@ -156,7 +154,7 @@ void KalmanFilter::ProcessMeasurement(const MeasurementPackage& measurement_pack
 // Private Members
 // -----------------------------------------------------------------------------
 
-void KalmanFilter::Predict(float dt) {
+void EkfTracker::Predict(float dt) {
   // Define the state transition matrix
   Eigen::MatrixXf f(4, 4);
   f  << 1, 0, dt, 0,
@@ -180,7 +178,7 @@ void KalmanFilter::Predict(float dt) {
 }
 
 
-void KalmanFilter::LidarUpdate(const Eigen::VectorXf& z) {
+void EkfTracker::LidarUpdate(const Eigen::VectorXf& z) {
   Eigen::VectorXf y = z - kH * x_;
   Eigen::MatrixXf kHt = kH.transpose();
   Eigen::MatrixXf s = kH * p_ * kHt + kRlidar;
@@ -194,7 +192,7 @@ void KalmanFilter::LidarUpdate(const Eigen::VectorXf& z) {
 }
 
 
-void KalmanFilter::RadarUpdate(const Eigen::VectorXf& z) {
+void EkfTracker::RadarUpdate(const Eigen::VectorXf& z) {
   // y = z - h(x)
   Eigen::VectorXf y = z - ConvertCartesianToPolar(x_);
 
