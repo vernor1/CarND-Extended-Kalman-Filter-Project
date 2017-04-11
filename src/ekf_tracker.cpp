@@ -102,11 +102,14 @@ Eigen::VectorXf ConvertPolarToCartesian(const Eigen::VectorXf& polar) {
 // Public Members
 // -----------------------------------------------------------------------------
 
-EkfTracker::EkfTracker(const Measurement& measurement)
-  : previous_timestamp_(measurement.timestamp),
+EkfTracker::EkfTracker()
+  : is_initialized_(false),
+    previous_timestamp_(-1),
     x_(Eigen::VectorXf::Zero(4)),
-    p_(kPinitial) {
+    p_(kPinitial) { }
 
+Eigen::VectorXf EkfTracker::operator()(const Measurement& measurement) {
+  if (!is_initialized_) {
     // Initialize the state with the first measurement
     if (measurement.sensor_type == Measurement::SensorType::kRadar) {
       x_ = ConvertPolarToCartesian(measurement.value);
@@ -114,9 +117,15 @@ EkfTracker::EkfTracker(const Measurement& measurement)
     else {
       x_ << measurement.value(0), measurement.value(1), 0, 0;
     }
-}
+    // Initialize the previous timestamp with the first measurement
+    previous_timestamp_ = measurement.timestamp;
+    is_initialized_ = true;
 
-void EkfTracker::ProcessMeasurement(const Measurement& measurement) {
+    std::cout << "x0" << std::endl << x_ << std::endl;
+    std::cout << "P0" << std::endl << p_ << std::endl;
+    return x_;
+  }
+
   // Time elapsed between the current and previous measurements in seconds
   float dt = (measurement.timestamp - previous_timestamp_) / 1000000.0;
   previous_timestamp_ = measurement.timestamp;
@@ -133,6 +142,7 @@ void EkfTracker::ProcessMeasurement(const Measurement& measurement) {
 
   std::cout << "x" << std::endl << x_ << std::endl;
   std::cout << "P" << std::endl << p_ << std::endl;
+  return x_;
 }
 
 // Private Members
