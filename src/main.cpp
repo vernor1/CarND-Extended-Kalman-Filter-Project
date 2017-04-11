@@ -168,13 +168,11 @@ Eigen::VectorXf CalculateRmse(
     std::cout << "Invalid input!" << std::endl;
     return rmse;
   }
-
   // Accumulate squared differences
   for (auto i = 0; i < estimation_sequence.size(); ++i) {
     rmse = rmse.array()
       + (estimation_sequence[i] - ground_truth_sequence[i]).array().pow(2);
   }
-
   rmse = (rmse / estimation_sequence.size()).array().sqrt();
 
   return rmse;
