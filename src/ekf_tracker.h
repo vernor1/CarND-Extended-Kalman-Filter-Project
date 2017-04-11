@@ -5,7 +5,9 @@
 
 class EkfTracker {
 public:
+  // Contains the sensor measurement data: timestamp, sensor type and value
   struct Measurement {
+    // Indicates the sensor type
     enum class SensorType {
       kLidar,
       kRadar
@@ -14,17 +16,25 @@ public:
     long long timestamp;
     SensorType sensor_type;
     Eigen::VectorXf value;
+
+    Measurement() : timestamp(0), sensor_type(SensorType::kLidar) { }
   };
 
-  EkfTracker();
+  // Ctor
+  // @param measurement The initial measurement
+  EkfTracker(const Measurement& measurement);
+
+  // Dtor
   virtual ~EkfTracker() { }
+
+  // Processes a single measurement data
+  // @param measurement The measurement data
   void ProcessMeasurement(const Measurement& measurement);
-  Eigen::VectorXf GetState() const { return x_; }
+
+  // Returns the current state
+  inline Eigen::VectorXf GetState() const { return x_; }
 
 private:
-  // Indicates whether the tracking was initiallized or not (first measurement)
-  bool is_initialized_;
-
   // Previous timestamp
   long previous_timestamp_;
 
@@ -34,23 +44,16 @@ private:
   // State covariance matrix
   Eigen::MatrixXf p_;
 
-  /**
-   * Prediction Predicts the state and the state covariance
-   * using the process model
-   * @param delta_T Time between k and k+1 in s
-   */
+  // Predicts the state and the state covariance using the process model
+  // @param dt Time between k and k+1 in s
   void Predict(float dt);
 
-  /**
-   * Updates the state by using standard Kalman Filter equations
-   * @param z The measurement at k+1
-   */
+  // Updates the state by using standard Kalman Filter equations
+  // @param z The measurement at k+1
   void LidarUpdate(const Eigen::VectorXf& z);
 
-  /**
-   * Updates the state by using Extended Kalman Filter equations
-   * @param z The measurement at k+1
-   */
+  // Updates the state by using Extended Kalman Filter equations
+  // @param z The measurement at k+1
   void RadarUpdate(const Eigen::VectorXf& z);
 };
 

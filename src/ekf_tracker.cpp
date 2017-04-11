@@ -3,6 +3,9 @@
 
 namespace {
 
+// Local Constants
+// -----------------------------------------------------------------------------
+
 const float kNoiseAx = 9;
 const float kNoiseAy = 9;
 const float kEpsilon = 1e-6;
@@ -11,7 +14,7 @@ const float kEpsilon = 1e-6;
 const Eigen::MatrixXf kH((Eigen::MatrixXf(2, 4)
   << 1, 0, 0, 0,
      0, 1, 0, 0).finished());
-const Eigen::MatrixXf kHt = kH.transpose();
+const auto kHt = kH.transpose();
 
 // Measurement covariance matrices
 const Eigen::MatrixXf kRlidar((Eigen::MatrixXf(2, 2)
@@ -29,23 +32,26 @@ const Eigen::MatrixXf kPinitial((Eigen::MatrixXf(4, 4)
      0, 0, 1000, 0,
      0, 0, 0, 1000).finished());
 
+// Local Helper-Functions
+// -----------------------------------------------------------------------------
+
 Eigen::MatrixXf CalculateJacobian(const Eigen::VectorXf& x_state) {
-  float px = x_state(0);
-  float py = x_state(1);
-  float vx = x_state(2);
-  float vy = x_state(3);
+  auto px = x_state(0);
+  auto py = x_state(1);
+  auto vx = x_state(2);
+  auto vy = x_state(3);
 
   Eigen::MatrixXf hj(Eigen::MatrixXf::Zero(3, 4));
-  float sum_of_squares = px * px + py * py;
+  auto sum_of_squares = px * px + py * py;
 
   if (std::fabs(px) < kEpsilon && std::fabs(py) < kEpsilon) {
     return hj;
   }
 
-  float sqrt_of_sum_of_squares = std::sqrt(sum_of_squares);
-  float sum_of_squares_to_3_by_2 = sum_of_squares * sqrt_of_sum_of_squares;
-  float px_by_sqrt = px / sqrt_of_sum_of_squares;
-  float py_by_sqrt = py / sqrt_of_sum_of_squares;
+  auto sqrt_of_sum_of_squares = std::sqrt(sum_of_squares);
+  auto sum_of_squares_to_3_by_2 = sum_of_squares * sqrt_of_sum_of_squares;
+  auto px_by_sqrt = px / sqrt_of_sum_of_squares;
+  auto py_by_sqrt = py / sqrt_of_sum_of_squares;
 
   // Compute the Jacobian matrix
   hj(0, 0) = px_by_sqrt;
@@ -60,12 +66,11 @@ Eigen::MatrixXf CalculateJacobian(const Eigen::VectorXf& x_state) {
   return hj;
 }
 
-
 Eigen::VectorXf ConvertCartesianToPolar(const Eigen::VectorXf& cartesian) {
-  float px = cartesian(0);
-  float py = cartesian(1);
-  float vx = cartesian(2);
-  float vy = cartesian(3);
+  auto px = cartesian(0);
+  auto py = cartesian(1);
+  auto vx = cartesian(2);
+  auto vy = cartesian(3);
 
   Eigen::VectorXf polar(Eigen::VectorXf::Zero(3));
 
@@ -73,7 +78,7 @@ Eigen::VectorXf ConvertCartesianToPolar(const Eigen::VectorXf& cartesian) {
     return polar;
   }
 
-  float sqrt_of_sum_of_squares = std::sqrt(px * px + py * py);
+  auto sqrt_of_sum_of_squares = std::sqrt(px * px + py * py);
 
   polar(0) = sqrt_of_sum_of_squares;;
   polar(1) = std::atan2(py, px);
@@ -82,10 +87,9 @@ Eigen::VectorXf ConvertCartesianToPolar(const Eigen::VectorXf& cartesian) {
   return polar;
 }
 
-
 Eigen::VectorXf ConvertPolarToCartesian(const Eigen::VectorXf& polar) {
-  float rho = polar(0);
-  float phi = polar(1);
+  auto rho = polar(0);
+  auto phi = polar(1);
 
   Eigen::VectorXf cartesian(4);
   cartesian << rho * std::cos(phi), rho * std::sin(phi), 0, 0;
@@ -95,19 +99,14 @@ Eigen::VectorXf ConvertPolarToCartesian(const Eigen::VectorXf& polar) {
 
 } // namespace
 
-
 // Public Members
 // -----------------------------------------------------------------------------
 
-EkfTracker::EkfTracker()
-  : is_initialized_(false),
-    previous_timestamp_(0),
+EkfTracker::EkfTracker(const Measurement& measurement)
+  : previous_timestamp_(measurement.timestamp),
     x_(Eigen::VectorXf::Zero(4)),
-    p_(Eigen::MatrixXf::Zero(4, 4)) { }
+    p_(kPinitial) {
 
-
-void EkfTracker::ProcessMeasurement(const Measurement& measurement) {
-  if (!is_initialized_) {
     // Initialize the state with the first measurement
     if (measurement.sensor_type == Measurement::SensorType::kRadar) {
       x_ = ConvertPolarToCartesian(measurement.value);
@@ -115,23 +114,9 @@ void EkfTracker::ProcessMeasurement(const Measurement& measurement) {
     else {
       x_ << measurement.value(0), measurement.value(1), 0, 0;
     }
+}
 
-    // State covariance matrix
-    p_ = kPinitial;
-
-    // Set the initial timestamp
-    previous_timestamp_ = measurement.timestamp;
-
-    // Done initializing, no need to predict or update
-    is_initialized_ = true;
-
-    std::cout << "x0" << std::endl << x_ << std::endl;
-    std::cout << "P0" << std::endl << p_ << std::endl;
-
-    return;
-  }
-
-
+void EkfTracker::ProcessMeasurement(const Measurement& measurement) {
   // Time elapsed between the current and previous measurements in seconds
   float dt = (measurement.timestamp - previous_timestamp_) / 1000000.0;
   previous_timestamp_ = measurement.timestamp;
@@ -150,7 +135,6 @@ void EkfTracker::ProcessMeasurement(const Measurement& measurement) {
   std::cout << "P" << std::endl << p_ << std::endl;
 }
 
-
 // Private Members
 // -----------------------------------------------------------------------------
 
@@ -164,9 +148,9 @@ void EkfTracker::Predict(float dt) {
 
   // Define the process covariance matrix Q
   Eigen::MatrixXf q(4, 4);
-  float dt2 = dt * dt;
-  float dt3 = dt2 * dt;
-  float dt4 = dt3 * dt;
+  auto dt2 = dt * dt;
+  auto dt3 = dt2 * dt;
+  auto dt4 = dt3 * dt;
   q << dt4 / 4 * kNoiseAx, 0, dt3 / 2 * kNoiseAx, 0,
        0, dt4 / 4 * kNoiseAy, 0, dt3 / 2 * kNoiseAy,
        dt3 / 2 * kNoiseAx, 0, dt2 * kNoiseAx, 0,
@@ -177,7 +161,6 @@ void EkfTracker::Predict(float dt) {
   p_ = f * p_ * f.transpose() + q;
 }
 
-
 void EkfTracker::LidarUpdate(const Eigen::VectorXf& z) {
   Eigen::VectorXf y = z - kH * x_;
   Eigen::MatrixXf kHt = kH.transpose();
@@ -186,11 +169,10 @@ void EkfTracker::LidarUpdate(const Eigen::VectorXf& z) {
 
   // New estimate
   x_ = x_ + k * y;
-  size_t x_size = x_.size();
-  Eigen::MatrixXf i = Eigen::MatrixXf::Identity(x_size, x_size);
+  auto x_size = x_.size();
+  auto i = Eigen::MatrixXf::Identity(x_size, x_size);
   p_ = (i - k * kH) * p_;
 }
-
 
 void EkfTracker::RadarUpdate(const Eigen::VectorXf& z) {
   // y = z - h(x)
@@ -204,7 +186,7 @@ void EkfTracker::RadarUpdate(const Eigen::VectorXf& z) {
 
   // New estimate
   x_ = x_ + k * y;
-  size_t x_size = x_.size();
+  auto x_size = x_.size();
   Eigen::MatrixXf i = Eigen::MatrixXf::Identity(x_size, x_size);
   p_ = (i - k * hj) * p_;
 }

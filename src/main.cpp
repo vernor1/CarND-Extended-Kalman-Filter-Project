@@ -1,28 +1,41 @@
 #include <fstream>
 #include <iostream>
-#include <iomanip>
-#include <sstream>
+#include <memory>
 #include <vector>
 #include "Eigen/Dense"
 #include "ekf_tracker.h"
 
+// Local Types
+// -----------------------------------------------------------------------------
 
-void check_arguments(int argc, char* argv[]) {
+typedef std::vector<EkfTracker::Measurement> MeasurementSequence;
+typedef std::vector<Eigen::VectorXf> GroundTruthSequence;
+typedef std::vector<Eigen::VectorXf> EstimationSequence;
+
+// Local Helper-Functions
+// -----------------------------------------------------------------------------
+
+// Checks arguments of the program and exits if the check fails.
+// @param argc Number of arguments
+// @param argc Array of arguments
+void CheckArguments(int argc, char* argv[]) {
   std::string usage_instructions = "Usage instructions: ";
   usage_instructions += argv[0];
   usage_instructions += " path/to/input.txt output.txt";
 
   bool has_valid_args = false;
 
-  // make sure the user has provided input and output files
+  // Make sure the user has provided input and output files
   if (argc == 1) {
     std::cerr << usage_instructions << std::endl;
   } else if (argc == 2) {
-    std::cerr << "Please include an output file.\n" << usage_instructions << std::endl;
+    std::cerr << "Please include an output file." << std::endl
+              << usage_instructions << std::endl;
   } else if (argc == 3) {
     has_valid_args = true;
   } else if (argc > 3) {
-    std::cerr << "Too many arguments.\n" << usage_instructions << std::endl;
+    std::cerr << "Too many arguments." << std::endl << usage_instructions
+              << std::endl;
   }
 
   if (!has_valid_args) {
@@ -30,72 +43,45 @@ void check_arguments(int argc, char* argv[]) {
   }
 }
 
-
-void check_files(std::ifstream& in_file, std::string& in_name,
-                 std::ofstream& out_file, std::string& out_name) {
+// Checks input and output files and exits if the check fails.
+// @param in_file       Input file
+// @param in_file_name  Input file name
+// @param out_file      Output file
+// @param out_file_name Output file name
+void CheckFiles(const std::ifstream& in_file,
+                const std::string& in_file_name,
+                const std::ofstream& out_file,
+                const std::string& out_file_name) {
   if (!in_file.is_open()) {
-    std::cerr << "Cannot open input file: " << in_name << std::endl;
+    std::cerr << "Cannot open input file: " << in_file_name << std::endl;
     exit(EXIT_FAILURE);
   }
 
   if (!out_file.is_open()) {
-    std::cerr << "Cannot open output file: " << out_name << std::endl;
+    std::cerr << "Cannot open output file: " << out_file_name << std::endl;
     exit(EXIT_FAILURE);
   }
 }
 
-
-Eigen::VectorXf CalculateRmse(const std::vector<Eigen::VectorXf>& estimations,
-                              const std::vector<Eigen::VectorXf>& ground_truth) {
-  Eigen::VectorXf rmse(4);
-  rmse << 0, 0, 0, 0;
-
-  // The estimation vector size should equal ground truth vector size
-  if (estimations.size() != ground_truth.size() || estimations.empty()) {
-    std::cout << "Invalid input!" << std::endl;
-    return rmse;
-  }
-
-  // Accumulate squared differences
-  for (auto i = 0; i < estimations.size(); ++i) {
-    rmse = rmse.array() + (estimations[i] - ground_truth[i]).array().pow(2);
-  }
-
-  rmse = (rmse / estimations.size()).array().sqrt();
-
-  return rmse;
-}
-
-int main(int argc, char* argv[]) {
-
-  check_arguments(argc, argv);
-
-  std::string in_file_name_ = argv[1];
-  std::ifstream in_file_(in_file_name_.c_str(), std::ifstream::in);
-
-  std::string out_file_name_ = argv[2];
-  std::ofstream out_file_(out_file_name_.c_str(), std::ofstream::out);
-
-  check_files(in_file_, in_file_name_, out_file_, out_file_name_);
-
-  std::vector<EkfTracker::Measurement> measurementSequence;
-  std::vector<Eigen::VectorXf> groundTruthSequence;
-
+// Loads input data.
+// @param in_file               Input file
+// @param measurement_sequence  Container for measurements data
+// @param ground_truth_sequence Container for ground truth data
+void LoadData(std::ifstream& in_file,
+              MeasurementSequence& measurement_sequence,
+              GroundTruthSequence& ground_truth_sequence) {
   std::string line;
-
-  // prep the measurement packages (each line represents a measurement at a
-  // timestamp)
-  while (getline(in_file_, line)) {
-    std::string sensor_type;
-    EkfTracker::Measurement measurement;
+  while (std::getline(in_file, line)) {
+    // Each line represents a measurement at a timestamp
     std::istringstream iss(line);
     long long timestamp;
+    std::string sensor_type;
+    EkfTracker::Measurement measurement;
 
     // Read the first element from the current line
     iss >> sensor_type;
     if (sensor_type == "L") {
-      // LASER MEASUREMENT
-      // Read measurements at this timestamp
+      // Laser measurement
       measurement.sensor_type = EkfTracker::Measurement::SensorType::kLidar;
       measurement.value = Eigen::VectorXf(2);
       float x;
@@ -103,10 +89,9 @@ int main(int argc, char* argv[]) {
       iss >> x >> y >> timestamp;
       measurement.value << x, y;
       measurement.timestamp = timestamp;
-      measurementSequence.push_back(measurement);
+      measurement_sequence.push_back(measurement);
     } else if (sensor_type == "R") {
-      // RADAR MEASUREMENT
-      // Read measurements at this timestamp
+      // Radar measurement
       measurement.sensor_type = EkfTracker::Measurement::SensorType::kRadar;
       measurement.value = Eigen::VectorXf(3);
       float rho;
@@ -115,7 +100,7 @@ int main(int argc, char* argv[]) {
       iss >> rho >> phi >> rho_dot >> timestamp;
       measurement.value << rho, phi, rho_dot;
       measurement.timestamp = timestamp;
-      measurementSequence.push_back(measurement);
+      measurement_sequence.push_back(measurement);
     }
 
     // Read ground truth data to compare later
@@ -126,64 +111,124 @@ int main(int argc, char* argv[]) {
     iss >> x_gt >> y_gt >> vx_gt >> vy_gt;
     Eigen::VectorXf groundTruth(4);
     groundTruth << x_gt, y_gt, vx_gt, vy_gt;
-    groundTruthSequence.push_back(groundTruth);
+    ground_truth_sequence.push_back(groundTruth);
   }
+}
 
-  // Create a Fusion EKF instance
-  EkfTracker ekf_tracker;
+// Perform estimations and dumps all estimations, measurements and ground truth
+// data to a file.
+// @param measurement_sequence  Container with measurements data
+// @param ground_truth_sequence Container with ground truth data
+// @param estimation_sequence   Container for esimations data
+// @param out_file              Output file
+void DoEstimations(const MeasurementSequence& measurement_sequence,
+                   const GroundTruthSequence& ground_truth_sequence,
+                   EstimationSequence& estimation_sequence,
+                   std::ofstream& out_file) {
+  // A placeholder for the EKF tracker
+  std::unique_ptr<EkfTracker> ekf_tracker;
 
-  // used to compute the RMSE later
-  std::vector<Eigen::VectorXf> estimations;
+  for (auto i = 0; i < measurement_sequence.size(); ++i) {
+    auto measurement = measurement_sequence[i];
+    auto groundTruth = ground_truth_sequence[i];
+    if (!ekf_tracker) {
+      // Handle the first measurement
+      ekf_tracker.reset(new EkfTracker(measurement));
+    } else {
+      ekf_tracker->ProcessMeasurement(measurement);
+    }
 
-  //Call the EKF-based fusion
-  size_t N = measurementSequence.size();
-  for (size_t k = 0; k < N; ++k) {
-    // start filtering from the second frame (the speed is unknown in the first
-    // frame)
-    ekf_tracker.ProcessMeasurement(measurementSequence[k]);
+    // Output the estimation
+    auto x = ekf_tracker->GetState();
+    out_file << x(0) << "\t" << x(1) << "\t" << x(2) << "\t" << x(3) << "\t";
 
-    // output the estimation
-    Eigen::VectorXf x = ekf_tracker.GetState();
-//    out_file_ << std::fixed << std::showpoint << std::setprecision(2) << std::setw(10);
-    out_file_ << x(0) << "\t";
-    out_file_ << x(1) << "\t";
-    out_file_ << x(2) << "\t";
-    out_file_ << x(3) << "\t";
-
-    // output the measurements
-    if (measurementSequence[k].sensor_type
+    // Output the measurements
+    if (measurement.sensor_type
         == EkfTracker::Measurement::SensorType::kLidar) {
       // Output the estimation
-      out_file_ << measurementSequence[k].value(0) << "\t";
-      out_file_ << measurementSequence[k].value(1) << "\t";
+      out_file << measurement.value(0) << "\t" << measurement.value(1) << "\t";
     } else {
       // Output the estimation in the cartesian coordinates
-      float ro = measurementSequence[k].value(0);
-      float phi = measurementSequence[k].value(1);
-      out_file_ << ro * cos(phi) << "\t";
-      out_file_ << ro * sin(phi) << "\t";
+      auto rho = measurement.value(0);
+      auto phi = measurement.value(1);
+      out_file << rho * cos(phi) << "\t" << rho * sin(phi) << "\t";
     }
 
     // Output the ground truth
-    out_file_ << groundTruthSequence[k](0) << "\t";
-    out_file_ << groundTruthSequence[k](1) << "\t";
-    out_file_ << groundTruthSequence[k](2) << "\t";
-    out_file_ << groundTruthSequence[k](3) << "\n";
+    out_file << groundTruth(0) << "\t" << groundTruth(1) << "\t"
+             << groundTruth(2) << "\t" << groundTruth(3) << "\n";
 
-    estimations.push_back(x);
+    estimation_sequence.push_back(x);
+  }
+}
+
+// Calculates RMSE of the estimations and ground truth data.
+// @param estimation_sequence   Container with esimations data
+// @param ground_truth_sequence Container with ground truth data
+Eigen::VectorXf CalculateRmse(
+  const EstimationSequence& estimation_sequence,
+  const GroundTruthSequence& ground_truth_sequence) {
+
+  Eigen::VectorXf rmse(4);
+  rmse << 0, 0, 0, 0;
+
+  // The estimation vector size should equal ground truth vector size
+  if (estimation_sequence.size() != ground_truth_sequence.size()
+      || estimation_sequence.empty()) {
+    std::cout << "Invalid input!" << std::endl;
+    return rmse;
+  }
+
+  // Accumulate squared differences
+  for (auto i = 0; i < estimation_sequence.size(); ++i) {
+    rmse = rmse.array()
+      + (estimation_sequence[i] - ground_truth_sequence[i]).array().pow(2);
+  }
+
+  rmse = (rmse / estimation_sequence.size()).array().sqrt();
+
+  return rmse;
+}
+
+// main
+// -----------------------------------------------------------------------------
+
+int main(int argc, char* argv[]) {
+
+  CheckArguments(argc, argv);
+
+  // Open and check files
+  std::ifstream in_file(argv[1], std::ifstream::in);
+  std::ofstream out_file(argv[2], std::ofstream::out);
+
+  CheckFiles(in_file, argv[1], out_file, argv[2]);
+
+  // Containers for loading measurements and ground truth data
+  std::vector<EkfTracker::Measurement> measurement_sequence;
+  std::vector<Eigen::VectorXf> ground_truth_sequence;
+
+  // Load input data and close the file
+  LoadData(in_file, measurement_sequence, ground_truth_sequence);
+  if (in_file.is_open()) {
+    in_file.close();
+  }
+
+  // Container for estimations data
+  EstimationSequence estimation_sequence;
+
+  // Perform estimations, dump log and close the file
+  DoEstimations(measurement_sequence,
+                ground_truth_sequence,
+                estimation_sequence,
+                out_file);
+  if (out_file.is_open()) {
+    out_file.close();
   }
 
   // Compute the accuracy (RMSE)
   std::cout << "RMSE" << std::endl;
-  std::cout << CalculateRmse(estimations, groundTruthSequence) << std::endl;
-
-  // Close files
-  if (out_file_.is_open()) {
-    out_file_.close();
-  }
-  if (in_file_.is_open()) {
-    in_file_.close();
-  }
+  std::cout << CalculateRmse(estimation_sequence, ground_truth_sequence)
+            << std::endl;
 
   return 0;
 }
