@@ -12,7 +12,7 @@ public:
     RADAR
   } sensor_type_;
 
-  Eigen::VectorXd gt_values_;
+  Eigen::VectorXf gt_values_;
 
 };
 

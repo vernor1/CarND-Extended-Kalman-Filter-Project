@@ -9,7 +9,7 @@ public:
   KalmanFilter();
   virtual ~KalmanFilter() { }
   void ProcessMeasurement(const MeasurementPackage& measurement_pack);
-  Eigen::VectorXd GetState() const { return x_; }
+  Eigen::VectorXf GetState() const { return x_; }
 
 private:
   // Indicates whether the tracking was initiallized or not (first measurement)
@@ -19,36 +19,29 @@ private:
   long previous_timestamp_;
 
   // State vector
-  Eigen::VectorXd x_;
+  Eigen::VectorXf x_;
 
   // State covariance matrix
-  Eigen::MatrixXd p_;
-
-  // Measurement matrix
-  Eigen::MatrixXd h_;
-
-  // Measurement covariance matrices
-  Eigen::MatrixXd r_lidar_;
-  Eigen::MatrixXd r_radar_;
+  Eigen::MatrixXf p_;
 
   /**
    * Prediction Predicts the state and the state covariance
    * using the process model
    * @param delta_T Time between k and k+1 in s
    */
-  void Predict(double dt);
+  void Predict(float dt);
 
   /**
    * Updates the state by using standard Kalman Filter equations
    * @param z The measurement at k+1
    */
-  void LidarUpdate(const Eigen::VectorXd& z);
+  void LidarUpdate(const Eigen::VectorXf& z);
 
   /**
    * Updates the state by using Extended Kalman Filter equations
    * @param z The measurement at k+1
    */
-  void RadarUpdate(const Eigen::VectorXd& z);
+  void RadarUpdate(const Eigen::VectorXf& z);
 };
 
 #endif // KALMAN_FILTER_H_
