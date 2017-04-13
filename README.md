@@ -1,85 +1,64 @@
-# Extended Kalman Filter Project Starter Code
-Self-Driving Car Engineer Nanodegree Program
+# Extended Kalman Filter Project
+
+The goals / steps of this project are the following:
+
+* Complete the Extended Kalman Filter algorithm in C++.
+* Ensure that your project compiles.
+* Test your Kalman Filter against the sample data. Ensure that the px, py, vx, and vy RMSE are below the values specified in the rubric.
+
+## [Rubric](https://review.udacity.com/#!/rubrics/748/view) Points
+### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.
 
 ---
+### Compiling
+#### 1. Your code should compile.  
 
-## Dependencies
+The code compiles without errors with cmake-3.7.2 and make-3.81 on macOS-10.12.4.
 
-* cmake >= 3.5
- * All OSes: [click here for installation instructions](https://cmake.org/install/)
-* make >= 4.1
-  * Linux: make is installed by default on most Linux distros
-  * Mac: [install Xcode command line tools to get make](https://developer.apple.com/xcode/features/)
-  * Windows: [Click here for installation instructions](http://gnuwin32.sourceforge.net/packages/make.htm)
-* gcc/g++ >= 5.4
-  * Linux: gcc / g++ is installed by default on most Linux distros
-  * Mac: same deal as make - [install Xcode command line tools]((https://developer.apple.com/xcode/features/)
-  * Windows: recommend using [MinGW](http://www.mingw.org/)
+---
+### Accuracy
+#### 1. The px, py, vx, vy output coordinates have an RMSE <= [0.08, 0.08, 0.60, 0.60] when using the file: "sample-laser-radar-measurement-data-1.txt".
 
-## Basic Build Instructions
+The computationally stable RMSE on `sample-laser-radar-measurement-data-1.txt` is `[0.0651653, 0.0605378, 0.543192, 0.544191]`.
 
-1. Clone this repo.
-2. Make a build directory: `mkdir build && cd build`
-3. Compile: `cmake .. && make` 
-   * On windows, you may need to run: `cmake .. -G "Unix Makefiles" && make`
-4. Run it: `./ExtendedKF path/to/input.txt path/to/output.txt`. You can find
-   some sample inputs in 'data/'.
-    - eg. `./ExtendedKF ../data/sample-laser-radar-measurement-data-1.txt output.txt`
 
-## Editor Settings
+#### 2. The px, py, vx, vy output coordinates have an RMSE <= [0.20, 0.20, .50, .85] when using the file: "sample-laser-radar-measurement-data-2.txt".
 
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
+The computationally stable RMSE on `sample-laser-radar-measurement-data-2.txt` is `[0.185497, 0.190302, 0.476754, 0.804467]`.
 
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
+---
+### Follows the Correct Algorithm
+#### 1. Your Sensor Fusion algorithm follows the general processing flow as taught in the preceding lessons.
 
-## Code Style
+The implemented solution follows the Sensor Fusion method, including the Extended Kalman Filter, which is described in the lesson.
 
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
 
-## Generating Additional Data
+#### 2. Your Kalman Filter algorithm handles the first measurements appropriately.
 
-This is optional!
+The first measurement is handled by `EkfTracker::operator()` defined in `ekf_tracker.cpp`.
 
-If you'd like to generate your own radar and lidar data, see the
-[utilities repo](https://github.com/udacity/CarND-Mercedes-SF-Utilities) for
-Matlab scripts that can generate additional data.
 
-## Project Instructions and Rubric
+#### 3. Your Kalman Filter algorithm first predicts then updates.
 
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
+The method `EkfTracker::Predict` is called before `EkfTracker::LidarUpdate` or `EkfTracker::RadarUpdate` in `EkfTracker::operator()`.
 
-More information is only accessible by people who are already enrolled in Term 2
-of CarND. If you are enrolled, see [the project page](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/0949fca6-b379-42af-a919-ee50aa304e6a/lessons/f758c44c-5e40-4e01-93b5-1a82aa4e044f/concepts/12dd29d8-2755-4b1b-8e03-e8f16796bea8)
-for instructions and the project rubric.
 
-## Hints!
+#### 4. Your Kalman Filter can handle radar and lidar measurements.
 
-* You don't have to follow this directory structure, but if you do, your work
-  will span all of the .cpp files here. Keep an eye out for TODOs.
+Method `EkfTracker::LidarUpdate` uses the constant measurement matrix `kH`, which is used along with the constant measurement covariance matrix `kRlidar` for estimating new state `x_` and state covariance matrix `P_`.
 
-## Call for IDE Profiles Pull Requests
+Method `EkfTracker::RadarUpdate` uses the function `ConvertCartesianToPolar` to compute `h(x')` and `CalculateJacobian` to compute the Jacobian matrix `Hj`, which are used along with the constant measurement covariance matrix `kRradar` for estimating new state `x_` and state covariance matrix `P_`.
 
-Help your fellow students!
+---
+### Code Efficiency
+#### 1. Your algorithm should avoid unnecessary calculations.
 
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to we ensure
-that students don't feel pressured to use one IDE or another.
+Most duplicating expensive computations (like floating point multiplications and divisions) are done only once and then reused, see functions `CalculateJacobian`, `ConvertCartesianToPolar`, `EkfTracker::Predict`, `EkfTracker::LidarUpdate`, `EkfTracker::RadarUpdate` in `ekf_tracker.cpp`. All constant matrices are moved to a nameless namespace of `ekf_tracker.cpp`.
 
-However! We'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
+---
+### Notes
 
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
-
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
-
-Regardless of the IDE used, every submitted project must
-still be compilable with cmake and make.
+* The code is complying with the [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html).
+* The main Sensor Fusion class EkfTracker is made a functor, which is easy to plug into an algorithm generating estimations out from measurements, see the use of `std::transform` in function `main` of `main.cpp`
+* The C++11 automatic type deduction is used wherever appropriate.
+* All function/method comments are made Doxygen-friendly
