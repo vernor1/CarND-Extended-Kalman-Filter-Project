@@ -173,9 +173,9 @@ void EkfTracker::Predict(float dt) {
 
 void EkfTracker::LidarUpdate(const Eigen::VectorXf& z) {
   Eigen::VectorXf y = z - kH * x_;
-  Eigen::MatrixXf kHt = kH.transpose();
-  Eigen::MatrixXf s = kH * p_ * kHt + kRlidar;
-  Eigen::MatrixXf k = p_ * kHt * s.inverse();
+  Eigen::MatrixXf pht = p_ * kH.transpose();
+  Eigen::MatrixXf s = kH * pht + kRlidar;
+  Eigen::MatrixXf k = pht * s.inverse();
 
   // New estimate
   x_ = x_ + k * y;
@@ -190,9 +190,9 @@ void EkfTracker::RadarUpdate(const Eigen::VectorXf& z) {
 
   // Hj instead of H for calcualting S, K, P
   Eigen::MatrixXf hj = CalculateJacobian(x_);
-  Eigen::MatrixXf hjt = hj.transpose();
-  Eigen::MatrixXf s = hj * p_ * hjt + kRradar;
-  Eigen::MatrixXf k = p_ * hjt * s.inverse();
+  Eigen::MatrixXf phjt = p_ * hj.transpose();
+  Eigen::MatrixXf s = hj * phjt + kRradar;
+  Eigen::MatrixXf k = phjt * s.inverse();
 
   // New estimate
   x_ = x_ + k * y;
